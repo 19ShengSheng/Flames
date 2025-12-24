@@ -1,10 +1,13 @@
 from flask import Flask, request, Response, stream_with_context, jsonify
-import os,io,time,threading,datetime,ast,uuid,pymysql,json,tempfile,subprocess,shutil
+import os,io,time,threading,datetime,ast,uuid,pymysql,json,tempfile,subprocess,shutil,sys
 from infer import run_inference_and_score
 from argparse import Namespace
 from flask import send_file
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
+
+# Add current directory to Python path to ensure local modules can be imported
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
@@ -148,18 +151,13 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         dataset_file = get_dataset_file_by_id(int(dataset_id))
         print(f"[TASK] 使用数据集文件: {dataset_file}")
         
-        # 创建任务专用的数据文件副本
-        task_data_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl")
-        if os.path.exists(dataset_file):
-            import shutil
-            shutil.copy2(dataset_file, task_data_file)
-            print(f"[TASK] 已复制数据集文件: {dataset_file} -> {task_data_file}")
-        else:
+        # 直接使用原始数据集文件，不创建副本
+        if not os.path.exists(dataset_file):
             raise Exception(f"数据集文件不存在: {dataset_file}")
         
         from argparse import Namespace
         args = Namespace(
-            data_path=task_data_file,
+            data_path=dataset_file,
             max_length=512,
             val_bsz_per_gpu=16,
             base_url=api_config['base_url'],
@@ -268,6 +266,33 @@ def get_task_row(task_id):
     row = cursor.fetchone()
     conn.close()
     return row
+
+def create_flames_tasks_with_ids(model_name, task_configs, submit_time):
+    tasks = []
+    
+    # 检查是否有running任务
+    running_count = has_running_task()
+    
+    for i, config in enumerate(task_configs):
+        task_id = config['task_id']
+        dataset_id = config['dataset_id']
+        
+        # 策略：
+        # 1. 如果当前没有running任务，且这是第一个新任务，直接设为running
+        # 2. 否则设为pending，由调度器按FIFO顺序处理
+        if running_count == 0 and i == 0:
+            initial_status = 'running'
+            print(f"[TASK] 立即启动任务: {task_id} (模型: {model_name}, 数据集: {dataset_id})")
+            # 立即启动任务执行线程
+            t = threading.Thread(target=run_task_algorithm, args=(task_id, model_name, dataset_id))
+            t.start()
+        else:
+            initial_status = 'pending'
+        
+        insert_task_to_db(task_id, model_name, dataset_id, submit_time, initial_status, None)
+        tasks.append({"dataset_id": dataset_id, "task_id": str(task_id)})
+    
+    return tasks
 
 def create_flames_tasks(model_name, dataset_ids, submit_time):
     tasks = []
@@ -422,13 +447,15 @@ def create_task():
     # 记录前端请求日志（不记录敏感信息）
     print(f"[API] 收到创建任务请求 - 模型: {model_name}, 数据集: {dataset_ids}")
     
-    # 创建任务
-    tasks = create_flames_tasks(model_name, dataset_ids, submit_time)
-    
-    # 为每个任务存储 API 配置到内存缓存
-    for task in tasks:
-        task_id = task['task_id']
+    # 先预先生成任务ID并存储API配置
+    task_configs = []
+    for dataset_id in dataset_ids:
+        task_id = str(uuid.uuid4())
         store_api_config(task_id, api_key, base_url)
+        task_configs.append({'task_id': task_id, 'dataset_id': dataset_id})
+    
+    # 创建任务（传入预先生成的task_id）
+    tasks = create_flames_tasks_with_ids(model_name, task_configs, submit_time)
     
     print(f"[API] 成功创建任务: {len(tasks)} 个")
     return jsonify({'tasks': tasks})

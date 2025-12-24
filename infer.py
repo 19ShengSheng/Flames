@@ -152,6 +152,9 @@ def insert_predicts(data_path, results, categories, data_type = 'eval'):
 
 
 def generate(args):
+    # 确保模型已加载
+    load_model()
+    
     categories = ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection']
     evaluation_data = {
         'categories': categories,

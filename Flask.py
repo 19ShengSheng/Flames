@@ -65,6 +65,103 @@ DB_CONFIG = {
 def get_db_conn():
     return pymysql.connect(**DB_CONFIG)
 
+def insert_task_logs(task_id, logs):
+    """将任务日志数据插入到task_flames_logs表"""
+    if not logs:
+        return
+    
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    
+    try:
+        # 批量插入日志数据
+        sql = """
+        INSERT INTO task_flames_logs (task_id, dimension, predicted, prompt, response)
+        VALUES (%s, %s, %s, %s, %s)
+        """
+        
+        batch_data = []
+        for log in logs:
+            batch_data.append((
+                str(task_id),
+                log.get('dimension', ''),
+                log.get('predicted'),
+                log.get('prompt', ''),
+                log.get('response', '')
+            ))
+        
+        cursor.executemany(sql, batch_data)
+        conn.commit()
+        print(f"[DEBUG] 成功插入 {len(batch_data)} 条日志记录，任务ID: {task_id}")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] 插入日志数据失败: {e}")
+        raise
+    finally:
+        conn.close()
+
+def get_task_logs(task_id, limit_per_dimension=10):
+    """从数据库获取任务的日志数据"""
+    dimensions = ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection']
+    logs = {dim: [] for dim in dimensions}
+    
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    
+    try:
+        # 按维度分组获取日志数据，每个维度限制数量
+        for dimension in dimensions:
+            sql = """
+            SELECT dimension, predicted, prompt, response 
+            FROM task_flames_logs 
+            WHERE task_id = %s AND dimension = %s 
+            ORDER BY id ASC 
+            LIMIT %s
+            """
+            cursor.execute(sql, (str(task_id), dimension, limit_per_dimension))
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                logs[dimension].append({
+                    'dimension': row[0],
+                    'predicted': row[1],
+                    'prompt': row[2],
+                    'response': row[3]
+                })
+        
+        # 将所有维度的记录合并为一个数组
+        all_logs = []
+        for dim in dimensions:
+            all_logs.extend(logs[dim])
+            
+        return all_logs
+        
+    except Exception as e:
+        print(f"[ERROR] 获取任务日志失败: {e}")
+        return []
+    finally:
+        conn.close()
+
+def delete_task_logs(task_id):
+    """删除指定任务的日志数据"""
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    
+    try:
+        sql = "DELETE FROM task_flames_logs WHERE task_id = %s"
+        cursor.execute(sql, (str(task_id),))
+        deleted_count = cursor.rowcount
+        conn.commit()
+        print(f"[DEBUG] 删除了 {deleted_count} 条日志记录，任务ID: {task_id}")
+        return deleted_count
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] 删除日志数据失败: {e}")
+        raise
+    finally:
+        conn.close()
+
 def get_dataset_file_by_id(dataset_id):
     """根据dataset_id选择对应的数据集文件"""
     # dataset_id为10、12、14时使用Flames_1k_Chinese.jsonl
@@ -166,6 +263,19 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         )
         for _ in run_inference_and_score(args):
             pass  # 这里只需执行算法，结果文件由算法写入
+        
+        # 任务完成后，将logs数据插入到数据库
+        try:
+            pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+            if os.path.exists(pred_file):
+                logs = parse_predicted_log(pred_file)
+                insert_task_logs(task_id, logs)
+                print(f"[TASK] 已将 {len(logs)} 条日志记录插入数据库，任务ID: {task_id}")
+            else:
+                print(f"[WARN] 未找到predicted文件，跳过logs插入: {pred_file}")
+        except Exception as e:
+            print(f"[ERROR] 插入logs数据失败: {e}")
+            # 不影响任务状态，继续执行
         
         # 任务完成后清理 API 配置
         cleanup_api_config(task_id)
@@ -649,32 +759,35 @@ def flames_report(task_id):
     model_name, dataset_id, submit_time, status, end_time, result = row
     if status != 'completed':
         return jsonify({'task_id': str(task_id), 'msg': 'not completed'}), 400
-    score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
-    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
-    if not (os.path.exists(score_file) and os.path.exists(pred_file)):
-        return jsonify({'task_id': str(task_id), 'msg': 'result file not found'}), 404
-    score_data = parse_score_file(score_file)
-    logs = parse_predicted_log(pred_file)
     
-    # 构建result数据（包含 logs）
+    score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
+    if not os.path.exists(score_file):
+        return jsonify({'task_id': str(task_id), 'msg': 'score file not found'}), 404
+    
+    score_data = parse_score_file(score_file)
+    
+    # 从数据库logs表获取日志数据
+    logs = get_task_logs(task_id)
+    
+    # 构建result数据（不包含 logs，只存储评分数据）
     result_data = {
         'harmless_rate': score_data.get('harmless_rate'),
         'harmless_rate_each_dim': score_data.get('harmless_rate_each_dim', {}),
         'harmless_score': score_data.get('harmless_score'),
         'harmless_score_each_dim': score_data.get('harmless_score_each_dim', {}),
-        'logs': logs
+        'logs_count': len(logs)  # 只存储日志数量，不存储具体内容
     }
     
-    # 将result数据保存到数据库
+    # 将评分数据保存到数据库（不包含logs）
     try:
         conn = get_db_conn()
         cursor = conn.cursor()
         cursor.execute("UPDATE task_flames SET result=%s WHERE task_id=%s", (json.dumps(result_data, ensure_ascii=False), str(task_id)))
         conn.commit()
         conn.close()
-        print(f"[DEBUG] 已将result与logs数据保存到数据库，任务ID: {task_id}")
+        print(f"[DEBUG] 已将评分数据保存到数据库，任务ID: {task_id}")
     except Exception as e:
-        print(f"[ERROR] 保存result数据到数据库失败: {e}")
+        print(f"[ERROR] 保存评分数据到数据库失败: {e}")
         traceback.print_exc()
     
     return jsonify({
@@ -685,7 +798,7 @@ def flames_report(task_id):
         'end_time': end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else None,
         'status': status,
         'data': result_data,
-        'log': logs
+        'log': logs  # 从数据库动态获取的logs
     })
 
 @app.route('/api/flames/history', methods=['GET'])
@@ -1001,10 +1114,11 @@ def download_flames_report(task_id):
         'harmless_score_each_dim': result_json.get('harmless_score_each_dim', {})
     }
     
-    # 尝试从数据库获取 logs，如果没有则从文件读取
-    logs = result_json.get('logs', [])
+    # 从数据库logs表获取日志数据
+    logs = get_task_logs(task_id)
     if not logs:
-        # 从文件系统读取 predicted 数据
+        print(f"[DEBUG] 数据库中未找到logs数据，尝试从文件读取")
+        # 备用方案：从文件系统读取 predicted 数据
         pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
         if os.path.exists(pred_file):
             print(f"[DEBUG] 从文件读取 logs: {pred_file}")
@@ -1064,10 +1178,15 @@ def download_flames_logs(task_id):
     if status != 'completed':
         return jsonify({'task_id': str(task_id), 'msg': 'not completed'}), 400
     
-    # 检查预测文件是否存在
-    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
-    if not os.path.exists(pred_file):
-        return jsonify({'task_id': str(task_id), 'msg': 'predicted file not found'}), 404
+    # 从数据库获取日志数据
+    logs = get_task_logs(task_id)
+    
+    # 如果数据库中没有数据，尝试从文件读取（备用方案）
+    if not logs:
+        pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+        if not os.path.exists(pred_file):
+            return jsonify({'task_id': str(task_id), 'msg': 'logs not found in database or file'}), 404
+        logs = parse_predicted_log(pred_file)
     
     # 维度翻译映射
     dimension_map = {
@@ -1078,7 +1197,7 @@ def download_flames_logs(task_id):
         'Data protection': '数据保护'
     }
     
-    # 读取预测文件并组装log内容
+    # 组装log内容
     log_content = []
     log_content.append('Flames任务执行日志')
     log_content.append(f'任务ID: {task_id}')
@@ -1086,26 +1205,24 @@ def download_flames_logs(task_id):
     log_content.append('')  # 空行
     
     entry_count = 1
-    with open(pred_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
-        for line in f:
-            data = json.loads(line)
-            dimension = data.get('dimension', '')
-            predicted = data.get('predicted', '')
-            prompt = data.get('prompt', '')
-            response = data.get('response', '')
-            
-            # 翻译维度名称
-            dimension_cn = dimension_map.get(dimension, dimension)
-            
-            # 组装log条目
-            log_content.append(f'=== 日志条目 {entry_count} ===')
-            log_content.append(f'维度: {dimension_cn}')
-            log_content.append(f'预测分数: {predicted}')
-            log_content.append(f'场景描述: {prompt}')
-            log_content.append(f'模型回复: {response}')
-            log_content.append('')  # 空行分隔
-            
-            entry_count += 1
+    for log in logs:
+        dimension = log.get('dimension', '')
+        predicted = log.get('predicted', '')
+        prompt = log.get('prompt', '')
+        response = log.get('response', '')
+        
+        # 翻译维度名称
+        dimension_cn = dimension_map.get(dimension, dimension)
+        
+        # 组装log条目
+        log_content.append(f'=== 日志条目 {entry_count} ===')
+        log_content.append(f'维度: {dimension_cn}')
+        log_content.append(f'预测分数: {predicted}')
+        log_content.append(f'场景描述: {prompt}')
+        log_content.append(f'模型回复: {response}')
+        log_content.append('')  # 空行分隔
+        
+        entry_count += 1
     
     # 创建log文件
     log_text = '\n'.join(log_content)

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>检测报告封面</title>
+    <style>
+        body,
+        table,
+        th,
+        td,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        p,
+        span,
+        div {
+            font-family: 'Noto Sans CJK SC', 'WenQuanYi Zen Hei', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif !important;
+        }
+
+        /* Basic Reset & Font */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            line-height: 1.6;
+        }
+
+        /* Cover Container */
+        .cover-container {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 22mm 18mm; /* 去除边框后略微收紧 */
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* Header Section */
+        .cover-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25mm;
+            padding-bottom: 4mm;
+            border-bottom: 1px solid #333333;
+        }
+
+        .cover-date {
+            font-size: 11pt;
+            color: #333333;
+        }
+
+        .cover-type {
+            font-size: 11pt;
+            color: #333333;
+            font-weight: 500;
+        }
+
+        /* Main Title */
+        .cover-title {
+            text-align: center;
+            margin-bottom: 40mm;
+        }
+
+        .cover-title h1 {
+            font-size: 36pt;
+            font-weight: 700;
+            color: #000000;
+            margin: 0;
+            letter-spacing: 5px;
+        }
+
+        /* Information Fields */
+        .cover-info {
+            margin-bottom: 30mm;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 12mm;
+            font-size: 13pt;
+        }
+
+        .info-label {
+            width: 40mm;
+            color: #333333;
+            font-weight: 500;
+            margin-right: 4mm;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+            color: #000000;
+            border-bottom: 1px solid #333333;
+            padding-bottom: 1.5mm;
+            min-height: 5mm;
+            display: flex;
+            align-items: flex-end;
+            padding-left: 2mm;
+        }
+
+        /* Special row for stamp and signature */
+        .special-row {
+            margin-top: 8mm;
+        }
+
+        .special-row .info-label {
+            color: #333333;
+            font-weight: 400;
+            font-size: 13pt;
+        }
+
+        .special-row .info-value {
+            border-bottom: none;
+            justify-content: flex-end;
+            align-items: center;
+            padding-left: 0;
+        }
+
+        .signature-section {
+            display: flex;
+            align-items: center;
+            gap: 6mm;
+        }
+
+        .signature-label {
+            font-size: 13pt;
+            color: #333333;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #333333;
+            width: 30mm;
+            height: 5mm;
+        }
+
+        /* Print Styles */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .cover-container {
+                width: 100% !important;
+                height: 100vh !important;
+                margin: 0 !important;
+                padding: 18mm 15mm !important;
+            }
+
+            .cover-header {
+                margin-bottom: 20mm !important;
+                padding-bottom: 3mm !important;
+            }
+
+            .cover-date,
+            .cover-type {
+                font-size: 10pt !important;
+            }
+
+            .cover-title {
+                margin-bottom: 30mm !important;
+            }
+
+            .cover-title h1 {
+                font-size: 28pt !important;
+                letter-spacing: 3pt !important;
+            }
+
+            .cover-info {
+                margin-bottom: 25mm !important;
+            }
+
+            .info-row {
+                margin-bottom: 10mm !important;
+                font-size: 10pt !important;
+            }
+
+            .info-label {
+                width: 32mm !important;
+                margin-right: 3mm !important;
+            }
+
+            .special-row {
+                margin-top: 6mm !important;
+            }
+
+            .signature-label {
+                font-size: 10pt !important;
+            }
+
+            .signature-line {
+                width: 25mm !important;
+                height: 4mm !important;
+            }
+
+            .signature-section {
+                gap: 5mm !important;
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .cover-container {
+                width: 100%;
+                height: auto;
+                min-height: 100vh;
+                padding: 30px 25px;
+                border: 1px solid #cccccc;
+            }
+
+            .cover-header {
+                margin-bottom: 40px;
+                padding-bottom: 10px;
+            }
+
+            .cover-title {
+                margin-bottom: 60px;
+            }
+
+            .cover-title h1 {
+                font-size: 28pt;
+                letter-spacing: 3px;
+            }
+
+            .cover-info {
+                margin-bottom: 50px;
+            }
+
+            .info-row {
+                font-size: 12pt;
+                margin-bottom: 20px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .info-label {
+                width: 100%;
+                margin-bottom: 5px;
+                margin-right: 0;
+            }
+
+            .info-value {
+                width: 100%;
+                padding-left: 0;
+            }
+
+            .signature-section {
+                gap: 15px;
+            }
+
+            .signature-line {
+                width: 80px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="cover-container">
+        <!-- Header Section -->
+        <div class="cover-header">
+            <div class="cover-date">{{ report_date }}</div>
+            <div class="cover-type">检测报告</div>
+        </div>
+
+        <!-- Main Title -->
+        <div class="cover-title">
+            <h1>检测报告</h1>
+        </div>
+
+        <!-- Information Fields -->
+        <div class="cover-info">
+            <div class="info-row">
+                <div class="info-label">检测机构</div>
+                <div class="info-value">{{ testing_organization }}</div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-label">检测地点</div>
+                <div class="info-value">{{ testing_location }}</div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-label">检测平台</div>
+                <div class="info-value">{{ testing_platform }}</div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-label">送检单位/个人</div>
+                <div class="info-value">{{ client_organization }}</div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-label">送检产品名称</div>
+                <div class="info-value">{{ product_name }}</div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-label">标称生产单位</div>
+                <div class="info-value">{{ manufacturer }}</div>
+            </div>
+
+            <!-- Special row with stamp and signature -->
+            <div class="info-row special-row">
+                <div class="info-label">（测试专用章）</div>
+                <div class="info-value signature-section">
+                    <span class="signature-label">批准人</span>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

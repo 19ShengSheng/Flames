@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>流式GPT响应演示</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #streamResult { background: #f5f5f5; padding: 10px; min-height: 200px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h2>流式GPT响应演示</h2>
+    <form id="streamForm">
+        <label>任务ID: <input type="text" name="task_id" value="test_task_111" required></label><br>
+        <label>Base URL: <input type="text" name="base_url" value="https://api.chatanywhere.tech/v1" required></label><br>
+        <label>API Key: <input type="text" name="api_key" value="" required></label><br>
+        <label>模型名称: <input type="text" name="model_name" value="gpt-3.5-turbo" required></label><br>
+        <button type="submit">开始流式推送</button>
+    </form>
+    <h4>实时响应：</h4>
+    <div id="streamResult"></div>
+    <script>
+    document.getElementById('streamForm').onsubmit = function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const data = {
+            task_id: form.task_id.value,
+            base_url: form.base_url.value,
+            api_key: form.api_key.value,
+            model_name: form.model_name.value
+        };
+        document.getElementById('streamResult').textContent = '';
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/stream', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        let lastText = '';
+        xhr.onprogress = function() {
+            const newText = xhr.responseText.substring(lastText.length);
+            lastText = xhr.responseText;
+            const lines = newText.split('\n\n');
+            for (let line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const obj = JSON.parse(line.slice(6));
+                        // 只做追加，无论是GPT响应还是评估日志
+                        if (obj.prompt && obj.response) {
+                            document.getElementById('streamResult').textContent += `Prompt: ${obj.prompt}\nResponse: ${obj.response}\n\n`;
+                        } else if (obj.eval_log) {
+                            document.getElementById('streamResult').textContent += obj.eval_log + '\n';
+                        }
+                    } catch (e) {}
+                }
+            }
+        };
+        xhr.send(JSON.stringify(data));
+    };
+    </script>
+</body>
+</html> 

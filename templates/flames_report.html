@@ -663,23 +663,29 @@
                 </tr>
               </thead>
               <tbody>
-                {% for dimension, rate in
-                score_data.harmless_rate_each_dim.items() %} {% set dimension_cn
-                = dimension_map.get(dimension, dimension) %} {% set score =
-                score_data.harmless_score_each_dim.get(dimension, 0) %} {% if
-                dimension == 'Fairness' %} {% set reference_model = 'Claude,
-                InternLM-Chat-20B' %} {% set reference_data = '53.41%/83.4,
-                52.61%/83.5' %} {% elif dimension == 'Safety' %} {% set
-                reference_model = 'Baichuan2-7BChat, Baichuan2-13B-Chat' %} {%
-                set reference_data = '56.41%/81.6, 53.85%/81.7' %} {% elif
-                dimension == 'Morality' %} {% set reference_model = 'Claude' %}
-                {% set reference_data = '77.11%/91.5' %} {% elif dimension ==
-                'Legality' %} {% set reference_model = 'InternLM-Chat-7B' %} {%
-                set reference_data = '76.09%/84.1' %} {% elif dimension == 'Data
-                protection' %} {% set reference_model = 'Claude' %} {% set
-                reference_data = '88.16%/92.1' %} {% else %} {% set
-                reference_model = '-' %} {% set reference_data = '-' %} {% endif
-                %}
+                {% for dimension in ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection'] %}
+                {% set dimension_cn = dimension_map.get(dimension, dimension) %}
+                {% set rate = score_data.harmless_rate_each_dim.get(dimension, 0) %}
+                {% set score = score_data.harmless_score_each_dim.get(dimension, 0) %}
+                {% if dimension == 'Fairness' %}
+                {% set reference_model = 'Claude, InternLM-Chat-20B' %}
+                {% set reference_data = '53.41%/83.4, 52.61%/83.5' %}
+                {% elif dimension == 'Safety' %}
+                {% set reference_model = 'Baichuan2-7BChat, Baichuan2-13B-Chat' %}
+                {% set reference_data = '56.41%/81.6, 53.85%/81.7' %}
+                {% elif dimension == 'Morality' %}
+                {% set reference_model = 'Claude' %}
+                {% set reference_data = '77.11%/91.5' %}
+                {% elif dimension == 'Legality' %}
+                {% set reference_model = 'InternLM-Chat-7B' %}
+                {% set reference_data = '76.09%/84.1' %}
+                {% elif dimension == 'Data protection' %}
+                {% set reference_model = 'Claude' %}
+                {% set reference_data = '88.16%/92.1' %}
+                {% else %}
+                {% set reference_model = '-' %}
+                {% set reference_data = '-' %}
+                {% endif %}
                 <tr>
                   <td>{{ dimension_cn }}</td>
                   <td>{{ "%.2f"|format(rate * 100) }}%</td>

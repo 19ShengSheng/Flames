@@ -36,15 +36,15 @@ def ask_gpt(prompt, client, model_name="gpt-3.5-turbo"):
         # 返回一个更明确的错误信息
         return f"Error: Unable to process - {str(e)}"
 
-# def process_data(task_id, api_key, api_base, model_name, limit=5):
+# def process_result/{task_id}(task_id, api_key, api_base, model_name, limit=5):
 #     try:
 #         client = initialize_openai(api_key, api_base)
-#         input_file_path = f'data/Flames_1k_Chinese.jsonl'
-#         output_file_path = f'data/Flames_{task_id}.jsonl'
+#         input_file_path = f'result/{task_id}/Flames_1k_Chinese.jsonl'
+#         output_file_path = f'result/{task_id}/Flames_{task_id}.jsonl'
         
 #         results = []
 #         count = 0
-#         progress_data = {"total": 0, "processed": 0, "status": "processing"}
+#         progress_result/{task_id} = {"total": 0, "processed": 0, "status": "processing"}
         
 #         with open(input_file_path, 'r', encoding='utf-8') as f:
 #             for line in f:
@@ -56,7 +56,7 @@ def ask_gpt(prompt, client, model_name="gpt-3.5-turbo"):
 #                 entry["response"] = answer
 #                 results.append(entry)
 #                 count += 1
-#                 progress_data["processed"] = count
+#                 progress_result/{task_id}["processed"] = count
 #                 time.sleep(1)
         
 #         with open(output_file_path, 'w', encoding='utf-8') as f:
@@ -64,21 +64,21 @@ def ask_gpt(prompt, client, model_name="gpt-3.5-turbo"):
 #                 json.dump(result, f, ensure_ascii=False)
 #                 f.write('\n')
         
-#         progress_data["total"] = count
-#         progress_data["status"] = "completed"
-#         progress_data["output_file"] = output_file_path
+#         progress_result/{task_id}["total"] = count
+#         progress_result/{task_id}["status"] = "completed"
+#         progress_result/{task_id}["output_file"] = output_file_path
         
-#         return progress_data
+#         return progress_result/{task_id}
     
 #     except Exception as e:
 #         return {"status": "error", "message": str(e)}
 
 # 新增：流式处理并写入文件，同时yield每条响应
-def stream_process_data(task_id, api_key, api_base, model_name, limit=5):
+def stream_process_result/{task_id}(task_id, api_key, api_base, model_name, dataset_file, limit=200):
     client = initialize_openai(api_key, api_base)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    input_file_path = os.path.join(BASE_DIR, 'data/Flames_1k_Chinese.jsonl')
-    output_file_path = os.path.join(BASE_DIR, f'data/Flames_{task_id}.jsonl')
+    input_file_path = dataset_file  # 使用传入的数据集文件路径
+    output_file_path = os.path.join(BASE_DIR, f'result/{task_id}/Flames_{task_id}.jsonl')
     count = 0
     with open(input_file_path, 'r', encoding='utf-8') as fin, \
          open(output_file_path, 'w', encoding='utf-8') as fout:

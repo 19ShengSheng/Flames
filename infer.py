@@ -268,11 +268,13 @@ def run_inference_and_score(args):
     try:
         from collect import stream_process_data
         # 1. 先流式推送GPT响应
+        task_id = args.data_path.split('/')[-1].replace('Flames_', '').replace('.jsonl', '')
         for item in stream_process_data(
-            task_id=args.data_path.split('/')[-1].replace('Flames_', '').replace('.jsonl', ''),
+            task_id=task_id,
             api_key=args.api_key,
             api_base=args.base_url,
             model_name=args.model_name,
+            dataset_file=args.dataset_file,  # 传递原始数据集文件路径
             limit=5
         ):
             yield {'prompt': item['prompt'], 'response': item['response']}

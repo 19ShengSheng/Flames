@@ -1,405 +1,412 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Flames对齐评估报告</title>
     <style>
-        @page {
-            size: A4;
-            margin: 2cm;
-            @top-center {
-                content: "Flames对齐评估报告";
-                font-size: 10pt;
-                color: #666;
-            }
-            @bottom-center {
-                content: "第 " counter(page) " 页，共 " counter(pages) " 页";
-                font-size: 10pt;
-                color: #666;
-            }
+      @page {
+        size: A4;
+        margin: 2cm;
+        @top-center {
+          content: "Flames对齐评估报告";
+          font-size: 10pt;
+          color: #666;
         }
-        
-        body {
-            font-family: 'SimSun', 'Microsoft YaHei', 'DejaVu Sans', Arial, sans-serif;
-            font-size: 12pt;
-            line-height: 1.5;
-            color: #333;
-            margin: 0;
-            padding: 20px;
+        @bottom-center {
+          content: "第 " counter(page) " 页，共 " counter(pages) " 页";
+          font-size: 10pt;
+          color: #666;
         }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 20px;
-        }
-        
-        .header h1 {
-            font-size: 24pt;
-            font-weight: bold;
-            color: #007bff;
-            margin: 0 0 15px 0;
-        }
-        
-        .task-info {
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        
-        .task-info-row {
-            display: flex;
-            border: 1px solid #ddd;
-            margin-bottom: 1px;
-        }
-        
-        .task-info-cell {
-            padding: 8px 12px;
-            background-color: #f8f9fa;
-        }
-        
-        .task-info-label {
-            font-weight: bold;
-            width: 30%;
-            border-right: 1px solid #ddd;
-        }
-        
-        .task-info-value {
-            width: 70%;
-        }
-        
-        .overview-section {
-            margin-bottom: 30px;
-            border: 2px solid #dc3545;
-            border-radius: 8px;
-            padding: 20px;
-            background-color: #fff5f5;
-        }
-        
-        .overview-title {
-            font-size: 16pt;
-            font-weight: bold;
-            color: #dc3545;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .overview-content {
-            display: flex;
-            width: 100%;
-            gap: 20px;
-        }
-        
-        .overview-left {
-            width: 50%;
-            padding-right: 10px;
-        }
-        
-        .overview-right {
-            width: 50%;
-            padding-left: 10px;
-        }
-        
-        .metric-item {
-            margin-bottom: 15px;
-        }
-        
-        .metric-label {
-            font-weight: bold;
-            color: #495057;
-            margin-bottom: 5px;
-        }
-        
-        .metric-value {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #dc3545;
-        }
-        
-        .progress-circle {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: #e9ecef;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 10px auto;
-            position: relative;
-            border: 8px solid #dc3545;
-        }
-        
-        .progress-text {
-            font-size: 16pt;
-            font-weight: bold;
-            color: #dc3545;
-        }
-        
-        .reference-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        
-        .reference-table th,
-        .reference-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-        
-        .reference-table th {
-            background-color: #f8f9fa;
-            font-weight: bold;
-        }
-        
-        .detail-section {
-            margin-bottom: 30px;
-        }
-        
-        .section-title {
-            font-size: 16pt;
-            font-weight: bold;
-            color: #495057;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 5px;
-        }
-        
-        .detail-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        
-        .detail-table th,
-        .detail-table td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: left;
-        }
-        
-        .detail-table th {
-            background-color: #f8f9fa;
-            font-weight: bold;
-            text-align: center;
-        }
-        
-        .logs-section {
-            margin-top: 30px;
-        }
-        
-        .dimension-group {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
-        }
-        
-        .dimension-title {
-            font-size: 14pt;
-            font-weight: bold;
-            color: #007bff;
-            margin-bottom: 15px;
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-left: 4px solid #007bff;
-        }
-        
-        .scenario-item {
-            margin-bottom: 20px;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 15px;
-            page-break-inside: avoid;
-        }
-        
-        .scenario-header {
-            display: flex;
-            width: 100%;
-            margin-bottom: 10px;
-            justify-content: space-between;
-        }
-        
-        .scenario-dimension {
-            font-weight: bold;
-            color: #495057;
-        }
-        
-        .scenario-score {
-            font-weight: bold;
-            color: #dc3545;
-        }
-        
-        .scenario-content {
-            margin-top: 10px;
-        }
-        
-        .scenario-label {
-            font-weight: bold;
-            color: #495057;
-            margin-bottom: 5px;
-        }
-        
-        .scenario-text {
-            background-color: #f8f9fa;
-            padding: 8px;
-            border-radius: 3px;
-            margin-bottom: 10px;
-            font-size: 11pt;
-        }
-        
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            color: #6c757d;
-            font-size: 10pt;
-            border-top: 1px solid #dee2e6;
-            padding-top: 15px;
-        }
+      }
+
+      body {
+        font-family: "SimSun", "Microsoft YaHei", "DejaVu Sans", Arial,
+          sans-serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 20px;
+      }
+
+      .header h1 {
+        font-size: 24pt;
+        font-weight: bold;
+        color: #007bff;
+        margin: 0 0 15px 0;
+      }
+
+      .task-info {
+        width: 100%;
+        margin-bottom: 20px;
+      }
+
+      .task-info-row {
+        display: flex;
+        border: 1px solid #ddd;
+        margin-bottom: 1px;
+      }
+
+      .task-info-cell {
+        padding: 8px 12px;
+        background-color: #f8f9fa;
+      }
+
+      .task-info-label {
+        font-weight: bold;
+        width: 30%;
+        border-right: 1px solid #ddd;
+      }
+
+      .task-info-value {
+        width: 70%;
+      }
+
+      .overview-section {
+        margin-bottom: 30px;
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        padding: 20px;
+        background-color: #fff5f5;
+      }
+
+      .overview-title {
+        font-size: 16pt;
+        font-weight: bold;
+        color: #dc3545;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .overview-content {
+        display: flex;
+        width: 100%;
+        gap: 20px;
+      }
+
+      .overview-left {
+        width: 50%;
+        padding-right: 10px;
+      }
+
+      .overview-right {
+        width: 50%;
+        padding-left: 10px;
+      }
+
+      .metric-item {
+        margin-bottom: 15px;
+      }
+
+      .metric-label {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 5px;
+      }
+
+      .metric-value {
+        font-size: 18pt;
+        font-weight: bold;
+        color: #dc3545;
+      }
+
+      .progress-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 10px auto;
+        position: relative;
+        border: 8px solid #dc3545;
+      }
+
+      .progress-text {
+        font-size: 16pt;
+        font-weight: bold;
+        color: #dc3545;
+      }
+
+      .reference-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      .reference-table th,
+      .reference-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+      }
+
+      .reference-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+      }
+
+      .detail-section {
+        margin-bottom: 30px;
+      }
+
+      .section-title {
+        font-size: 16pt;
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 5px;
+      }
+
+      .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+      }
+
+      .detail-table th,
+      .detail-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+      }
+
+      .detail-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+        text-align: center;
+      }
+
+      .logs-section {
+        margin-top: 30px;
+      }
+
+      .dimension-group {
+        margin-bottom: 25px;
+        page-break-inside: avoid;
+      }
+
+      .dimension-title {
+        font-size: 14pt;
+        font-weight: bold;
+        color: #007bff;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-left: 4px solid #007bff;
+      }
+
+      .scenario-item {
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 15px;
+        page-break-inside: avoid;
+      }
+
+      .scenario-header {
+        display: flex;
+        width: 100%;
+        margin-bottom: 10px;
+        justify-content: space-between;
+      }
+
+      .scenario-dimension {
+        font-weight: bold;
+        color: #495057;
+      }
+
+      .scenario-score {
+        font-weight: bold;
+        color: #dc3545;
+      }
+
+      .scenario-content {
+        margin-top: 10px;
+      }
+
+      .scenario-label {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 5px;
+      }
+
+      .scenario-text {
+        background-color: #f8f9fa;
+        padding: 8px;
+        border-radius: 3px;
+        margin-bottom: 10px;
+        font-size: 11pt;
+      }
+
+      .footer {
+        margin-top: 30px;
+        text-align: center;
+        color: #6c757d;
+        font-size: 10pt;
+        border-top: 1px solid #dee2e6;
+        padding-top: 15px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="header">
-        <h1>Flames对齐评估报告</h1>
+      <h1>Flames对齐评估报告</h1>
     </div>
-    
+
     <div class="task-info">
-        <div class="task-info-row">
-            <div class="task-info-cell task-info-label">任务ID:</div>
-            <div class="task-info-cell task-info-value">{{ task_info.task_id }}</div>
+      <div class="task-info-row">
+        <div class="task-info-cell task-info-label">任务ID:</div>
+        <div class="task-info-cell task-info-value">
+          {{ task_info.task_id }}
         </div>
-        <div class="task-info-row">
-            <div class="task-info-cell task-info-label">模型名称:</div>
-            <div class="task-info-cell task-info-value">{{ task_info.model_name }}</div>
+      </div>
+      <div class="task-info-row">
+        <div class="task-info-cell task-info-label">模型名称:</div>
+        <div class="task-info-cell task-info-value">
+          {{ task_info.model_name }}
         </div>
-        <div class="task-info-row">
-            <div class="task-info-cell task-info-label">测试时间:</div>
-            <div class="task-info-cell task-info-value">{{ task_info.submit_time }}</div>
+      </div>
+      <div class="task-info-row">
+        <div class="task-info-cell task-info-label">测试时间:</div>
+        <div class="task-info-cell task-info-value">
+          {{ task_info.submit_time }}
         </div>
+      </div>
     </div>
-    
+
     <div class="overview-section">
-        <div class="overview-title">综合评估结果</div>
-        <div class="overview-content">
-            <div class="overview-left">
-                <div class="metric-item">
-                    <div class="metric-label">综合无害率</div>
-                    <div class="progress-circle">
-                        <div class="progress-text">{{ "%.2f"|format(score_data.harmless_rate * 100) }}%</div>
-                    </div>
-                </div>
-                <div class="metric-item">
-                    <div class="metric-label">综合得分</div>
-                    <div class="metric-value">{{ score_data.harmless_score }}</div>
-                </div>
+      <div class="overview-title">综合评估结果</div>
+      <div class="overview-content">
+        <div class="overview-left">
+          <div class="metric-item">
+            <div class="metric-label">综合无害率</div>
+            <div class="progress-circle">
+              <div class="progress-text">
+                {{ "%.2f"|format(score_data.harmless_rate * 100) }}%
+              </div>
             </div>
-            <div class="overview-right">
-                <div class="metric-label">参考指标来自对17个主流大模型评估结果:</div>
-                <table class="reference-table">
-                    <thead>
-                        <tr>
-                            <th>模型</th>
-                            <th>综合无害率</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Claude</td>
-                            <td>63.77%</td>
-                        </tr>
-                        <tr>
-                            <td>InternLM - Chat - 20B</td>
-                            <td>58.56%</td>
-                        </tr>
-                        <tr>
-                            <td>InternLM - Chat - 7B</td>
-                            <td>53.93%</td>
-                        </tr>
-                        <tr>
-                            <td>ChatGPT</td>
-                            <td>46.91%</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">综合得分</div>
+            <div class="metric-value">{{ score_data.harmless_score }}</div>
+          </div>
         </div>
-    </div>
-    
-    <div class="detail-section">
-        <div class="section-title">详细分析</div>
-        <table class="detail-table">
+        <div class="overview-right">
+          <div class="metric-label">参考指标来自对17个主流大模型评估结果:</div>
+          <table class="reference-table">
             <thead>
-                <tr>
-                    <th>维度</th>
-                    <th>无害率</th>
-                    <th>得分</th>
-                    <th>参考模型</th>
-                    <th>参考数据</th>
-                </tr>
+              <tr>
+                <th>模型</th>
+                <th>综合无害率</th>
+              </tr>
             </thead>
             <tbody>
-                {% for dimension, rate in score_data.harmless_rate_each_dim.items() %}
-                {% set dimension_cn = dimension_map.get(dimension, dimension) %}
-                {% set score = score_data.harmless_score_each_dim.get(dimension, 0) %}
-                {% if dimension == 'Fairness' %}
-                    {% set reference_model = 'Claude, InternLM-Chat-20B' %}
-                    {% set reference_data = '53.41%/83.4, 52.61%/83.5' %}
-                {% elif dimension == 'Safety' %}
-                    {% set reference_model = 'Baichuan2-7BChat, Baichuan2-13B-Chat' %}
-                    {% set reference_data = '56.41%/81.6, 53.85%/81.7' %}
-                {% elif dimension == 'Morality' %}
-                    {% set reference_model = 'Claude' %}
-                    {% set reference_data = '77.11%/91.5' %}
-                {% elif dimension == 'Legality' %}
-                    {% set reference_model = 'InternLM-Chat-7B' %}
-                    {% set reference_data = '76.09%/84.1' %}
-                {% elif dimension == 'Data protection' %}
-                    {% set reference_model = 'Claude' %}
-                    {% set reference_data = '88.16%/92.1' %}
-                {% else %}
-                    {% set reference_model = '-' %}
-                    {% set reference_data = '-' %}
-                {% endif %}
-                <tr>
-                    <td>{{ dimension_cn }}</td>
-                    <td>{{ "%.2f"|format(rate * 100) }}%</td>
-                    <td>{{ "%.2f"|format(score) }}</td>
-                    <td>{{ reference_model }}</td>
-                    <td>{{ reference_data }}</td>
-                </tr>
-                {% endfor %}
+              <tr>
+                <td>Claude</td>
+                <td>63.77%</td>
+              </tr>
+              <tr>
+                <td>InternLM - Chat - 20B</td>
+                <td>58.56%</td>
+              </tr>
+              <tr>
+                <td>InternLM - Chat - 7B</td>
+                <td>53.93%</td>
+              </tr>
+              <tr>
+                <td>ChatGPT</td>
+                <td>46.91%</td>
+              </tr>
             </tbody>
-        </table>
-    </div>
-    
-    <div class="logs-section">
-        <div class="section-title">加载日志</div>
-        {% for dimension in ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection'] %}
-        {% set dimension_logs = logs|selectattr('dimension', 'equalto', dimension)|list %}
-        {% if dimension_logs %}
-        <div class="dimension-group">
-            <div class="dimension-title">{{ dimension_map.get(dimension, dimension) }}</div>
-            {% for log in dimension_logs %}
-            <div class="scenario-item">
-                <div class="scenario-header">
-                    <div class="scenario-dimension">{{ dimension_map.get(dimension, dimension) }}</div>
-                    <div class="scenario-score">预测分数: {{ log.predicted }}</div>
-                </div>
-                <div class="scenario-content">
-                    <div class="scenario-label">场景描述:</div>
-                    <div class="scenario-text">{{ log.prompt }}</div>
-                    <div class="scenario-label">模型回复:</div>
-                    <div class="scenario-text">{{ log.response }}</div>
-                </div>
-            </div>
-            {% endfor %}
+          </table>
         </div>
-        {% endif %}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="section-title">详细分析</div>
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>无害率</th>
+            <th>得分</th>
+            <th>参考模型</th>
+            <th>参考数据</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dimension in ['Fairness', 'Safety', 'Morality', 'Legality',
+          'Data protection'] %} {% set dimension_cn =
+          dimension_map.get(dimension, dimension) %} {% set rate =
+          score_data.harmless_rate_each_dim.get(dimension, 0) %} {% set score =
+          score_data.harmless_score_each_dim.get(dimension, 0) %} {% if
+          dimension == 'Fairness' %} {% set reference_model = 'Claude,
+          InternLM-Chat-20B' %} {% set reference_data = '53.41%/83.4,
+          52.61%/83.5' %} {% elif dimension == 'Safety' %} {% set
+          reference_model = 'Baichuan2-7BChat, Baichuan2-13B-Chat' %} {% set
+          reference_data = '56.41%/81.6, 53.85%/81.7' %} {% elif dimension ==
+          'Morality' %} {% set reference_model = 'Claude' %} {% set
+          reference_data = '77.11%/91.5' %} {% elif dimension == 'Legality' %}
+          {% set reference_model = 'InternLM-Chat-7B' %} {% set reference_data =
+          '76.09%/84.1' %} {% elif dimension == 'Data protection' %} {% set
+          reference_model = 'Claude' %} {% set reference_data = '88.16%/92.1' %}
+          {% else %} {% set reference_model = '-' %} {% set reference_data = '-'
+          %} {% endif %}
+          <tr>
+            <td>{{ dimension_cn }}</td>
+            <td>{{ "%.2f"|format(rate * 100) }}%</td>
+            <td>{{ "%.2f"|format(score) }}</td>
+            <td>{{ reference_model }}</td>
+            <td>{{ reference_data }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="logs-section">
+      <div class="section-title">加载日志</div>
+      {% for dimension in ['Fairness', 'Safety', 'Morality', 'Legality', 'Data
+      protection'] %} {% set dimension_logs = logs|selectattr('dimension',
+      'equalto', dimension)|list %} {% if dimension_logs %}
+      <div class="dimension-group">
+        <div class="dimension-title">
+          {{ dimension_map.get(dimension, dimension) }}
+        </div>
+        {% for log in dimension_logs %}
+        <div class="scenario-item">
+          <div class="scenario-header">
+            <div class="scenario-dimension">
+              {{ dimension_map.get(dimension, dimension) }}
+            </div>
+            <div class="scenario-score">预测分数: {{ log.predicted }}</div>
+          </div>
+          <div class="scenario-content">
+            <div class="scenario-label">场景描述:</div>
+            <div class="scenario-text">{{ log.prompt }}</div>
+            <div class="scenario-label">模型回复:</div>
+            <div class="scenario-text">{{ log.response }}</div>
+          </div>
+        </div>
         {% endfor %}
+      </div>
+      {% endif %} {% endfor %}
     </div>
-    
+
     <div class="footer">
-        <p>报告生成时间: {{ generation_time }}</p>
-        <p>© 2025 大模型评估系统</p>
+      <p>报告生成时间: {{ generation_time }}</p>
+      <p>© 2025 大模型评估系统</p>
     </div>
-</body>
-</html> 
+  </body>
+</html>

@@ -24,34 +24,45 @@ CORS(app)
 # API 配置缓存：临时存储任务的 API 信息
 API_CONFIG_CACHE = {}
 import time
+import threading
+
+# 添加线程锁来保护 API_CONFIG_CACHE 的访问
+API_CONFIG_LOCK = threading.Lock()
 
 def store_api_config(task_id, api_key, base_url):
     """临时存储 API 配置信息"""
-    API_CONFIG_CACHE[str(task_id)] = {
-        'api_key': api_key,
-        'base_url': base_url,
-        'timestamp': time.time()
-    }
-    print(f"[CACHE] 已存储任务 {task_id} 的 API 配置信息")
+    with API_CONFIG_LOCK:
+        task_id_str = str(task_id)
+        API_CONFIG_CACHE[task_id_str] = {
+            'api_key': api_key,
+            'base_url': base_url,
+            'timestamp': time.time()
+        }
 
 def get_api_config(task_id):
     """获取 API 配置信息"""
-    config = API_CONFIG_CACHE.get(str(task_id))
-    if config:
-        # 检查是否过期（24小时）
-        if time.time() - config['timestamp'] < 86400:
-            return config
-        else:
-            # 过期则删除
-            del API_CONFIG_CACHE[str(task_id)]
-            print(f"[CACHE] 任务 {task_id} 的 API 配置已过期，已清理")
-    return None
+    with API_CONFIG_LOCK:
+        task_id_str = str(task_id)
+        config = API_CONFIG_CACHE.get(task_id_str)
+        if config:
+            # 检查是否过期（24小时）
+            if time.time() - config['timestamp'] < 86400:
+                # 检查配置是否有效（api_key 和 base_url 不能为空）
+                if config.get('api_key') and config.get('base_url'):
+                    return config
+                else:
+                    del API_CONFIG_CACHE[task_id_str]
+            else:
+                # 过期则删除
+                del API_CONFIG_CACHE[task_id_str]
+        return None
 
 def cleanup_api_config(task_id):
     """清理 API 配置信息"""
-    if str(task_id) in API_CONFIG_CACHE:
-        del API_CONFIG_CACHE[str(task_id)]
-        print(f"[CACHE] 已清理任务 {task_id} 的 API 配置信息")
+    with API_CONFIG_LOCK:
+        task_id_str = str(task_id)
+        if task_id_str in API_CONFIG_CACHE:
+            del API_CONFIG_CACHE[task_id_str]
 
 DB_CONFIG = {
     'host': 'dbconn.sealosbja.site',
@@ -65,102 +76,50 @@ DB_CONFIG = {
 def get_db_conn():
     return pymysql.connect(**DB_CONFIG)
 
-def insert_task_logs(task_id, logs):
-    """将任务日志数据插入到task_flames_logs表"""
-    if not logs:
-        return
-    
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    
-    try:
-        # 批量插入日志数据
-        sql = """
-        INSERT INTO task_flames_logs (task_id, dimension, predicted, prompt, response)
-        VALUES (%s, %s, %s, %s, %s)
-        """
-        
-        batch_data = []
-        for log in logs:
-            batch_data.append((
-                str(task_id),
-                log.get('dimension', ''),
-                log.get('predicted'),
-                log.get('prompt', ''),
-                log.get('response', '')
-            ))
-        
-        cursor.executemany(sql, batch_data)
-        conn.commit()
-        print(f"[DEBUG] 成功插入 {len(batch_data)} 条日志记录，任务ID: {task_id}")
-        
-    except Exception as e:
-        conn.rollback()
-        print(f"[ERROR] 插入日志数据失败: {e}")
-        raise
-    finally:
-        conn.close()
-
 def get_task_logs(task_id, limit_per_dimension=10):
-    """从数据库获取任务的日志数据"""
+    """从predicted文件获取任务的日志数据"""
+    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+    
+    if not os.path.exists(pred_file):
+        print(f"[WARN] predicted文件不存在: {pred_file}")
+        return []
+    
     dimensions = ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection']
     logs = {dim: [] for dim in dimensions}
     
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    
     try:
-        # 按维度分组获取日志数据，每个维度限制数量
-        for dimension in dimensions:
-            sql = """
-            SELECT dimension, predicted, prompt, response 
-            FROM task_flames_logs 
-            WHERE task_id = %s AND dimension = %s 
-            ORDER BY id ASC 
-            LIMIT %s
-            """
-            cursor.execute(sql, (str(task_id), dimension, limit_per_dimension))
-            rows = cursor.fetchall()
-            
-            for row in rows:
-                logs[dimension].append({
-                    'dimension': row[0],
-                    'predicted': row[1],
-                    'prompt': row[2],
-                    'response': row[3]
-                })
+        with open(pred_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    data = json.loads(line)
+                    dim = data.get('dimension')
+                    if dim in dimensions and len(logs[dim]) < limit_per_dimension:
+                        logs[dim].append({
+                            'dimension': dim,
+                            'predicted': data.get('predicted'),
+                            'prompt': data.get('prompt', ''),
+                            'response': data.get('response', '')
+                        })
+                except json.JSONDecodeError:
+                    continue
+                except Exception as e:
+                    print(f"[WARN] 解析日志行失败: {e}")
+                    continue
         
         # 将所有维度的记录合并为一个数组
         all_logs = []
         for dim in dimensions:
             all_logs.extend(logs[dim])
-            
+        
         return all_logs
         
     except Exception as e:
         print(f"[ERROR] 获取任务日志失败: {e}")
         return []
-    finally:
-        conn.close()
-
-def delete_task_logs(task_id):
-    """删除指定任务的日志数据"""
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    
-    try:
-        sql = "DELETE FROM task_flames_logs WHERE task_id = %s"
-        cursor.execute(sql, (str(task_id),))
-        deleted_count = cursor.rowcount
-        conn.commit()
-        print(f"[DEBUG] 删除了 {deleted_count} 条日志记录，任务ID: {task_id}")
-        return deleted_count
-    except Exception as e:
-        conn.rollback()
-        print(f"[ERROR] 删除日志数据失败: {e}")
-        raise
-    finally:
-        conn.close()
 
 def get_dataset_file_by_id(dataset_id):
     """根据dataset_id选择对应的数据集文件"""
@@ -248,13 +207,17 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         dataset_file = get_dataset_file_by_id(int(dataset_id))
         print(f"[TASK] 使用数据集文件: {dataset_file}")
         
-        # 直接使用原始数据集文件，不创建副本
+        # 检查数据集文件是否存在
         if not os.path.exists(dataset_file):
             raise Exception(f"数据集文件不存在: {dataset_file}")
         
+        # 创建任务专用的输出文件路径
+        output_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl")
+        
         from argparse import Namespace
         args = Namespace(
-            data_path=dataset_file,
+            data_path=output_file,  # 使用输出文件路径，因为后续推理会读取这个文件
+            dataset_file=dataset_file,  # 传递原始数据集文件路径用于 GPT 调用
             max_length=512,
             val_bsz_per_gpu=16,
             base_url=api_config['base_url'],
@@ -263,19 +226,6 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         )
         for _ in run_inference_and_score(args):
             pass  # 这里只需执行算法，结果文件由算法写入
-        
-        # 任务完成后，将logs数据插入到数据库
-        try:
-            pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
-            if os.path.exists(pred_file):
-                logs = parse_predicted_log(pred_file)
-                insert_task_logs(task_id, logs)
-                print(f"[TASK] 已将 {len(logs)} 条日志记录插入数据库，任务ID: {task_id}")
-            else:
-                print(f"[WARN] 未找到predicted文件，跳过logs插入: {pred_file}")
-        except Exception as e:
-            print(f"[ERROR] 插入logs数据失败: {e}")
-            # 不影响任务状态，继续执行
         
         # 任务完成后清理 API 配置
         cleanup_api_config(task_id)
@@ -321,8 +271,9 @@ def task_scheduler_loop():
                 if row:
                     task_id, model_name, dataset_id, submit_time = row
                     print(f"[SCHEDULER] 开始处理pending任务: {task_id}")
-                    
+
                     # 检查是否有 API 配置信息
+                    print(f"[SCHEDULER] 检查任务 {task_id} 的 API 配置...")
                     api_config = get_api_config(task_id)
                     if not api_config:
                         print(f"[ERROR] 未找到任务 {task_id} 的 API 配置信息，跳过执行")
@@ -379,14 +330,14 @@ def get_task_row(task_id):
 
 def create_flames_tasks_with_ids(model_name, task_configs, submit_time):
     tasks = []
-    
+
     # 检查是否有running任务
     running_count = has_running_task()
-    
+
     for i, config in enumerate(task_configs):
         task_id = config['task_id']
         dataset_id = config['dataset_id']
-        
+
         # 策略：
         # 1. 如果当前没有running任务，且这是第一个新任务，直接设为running
         # 2. 否则设为pending，由调度器按FIFO顺序处理
@@ -398,10 +349,11 @@ def create_flames_tasks_with_ids(model_name, task_configs, submit_time):
             t.start()
         else:
             initial_status = 'pending'
-        
+            print(f"[TASK] 创建pending任务: {task_id} (模型: {model_name}, 数据集: {dataset_id})")
+
         insert_task_to_db(task_id, model_name, dataset_id, submit_time, initial_status, None)
         tasks.append({"dataset_id": dataset_id, "task_id": str(task_id)})
-    
+
     return tasks
 
 def create_flames_tasks(model_name, dataset_ids, submit_time):
@@ -553,7 +505,7 @@ def create_task():
     api_site = data.get('api_site')
     base_url = api_site if api_site else ""
     api_key = data.get('api_key', "")
-    
+
     # 记录前端请求日志（不记录敏感信息）
     print(f"[API] 收到创建任务请求 - 模型: {model_name}, 数据集: {dataset_ids}")
     
@@ -605,9 +557,13 @@ def flames_progress_stream(task_id):
             if not api_config:
                 yield f"data: {json.dumps({'error': 'API配置信息丢失，无法继续执行'}, ensure_ascii=False)}\n\n"
                 return
-                
+            
+            # 根据dataset_id选择正确的数据集文件
+            dataset_file = get_dataset_file_by_id(int(dataset_id))
+            
             args = Namespace(
                 data_path=os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl"),
+                dataset_file=dataset_file,  # 传递原始数据集文件路径
                 max_length=512,
                 val_bsz_per_gpu=16,
                 base_url=api_config['base_url'],
@@ -631,8 +587,6 @@ def flames_progress_stream(task_id):
             # 判断是否全部推理已完成
             inference_total = total_count  # 这里假设推理流总数等于已完成条数
             if already_done >= inference_total and already_done > 0:
-                print(f"[DEBUG] 任务 {task_id} 推理已完成，开始推送评估日志")
-                
                 # 推送最后一条推理流
                 last_line = json.loads(lines[-1])
                 last_line['finished_count'] = already_done
@@ -641,7 +595,6 @@ def flames_progress_stream(task_id):
                 
                 # 断点续流时等待5秒再推送评估日志
                 time.sleep(5)
-                print(f"[DEBUG] 等待5秒后开始推送评估日志")
                 yield f"data: {json.dumps({'eval_log': '正在进行评估，请等候'}, ensure_ascii=False)}\n\n"
                 
 
@@ -653,11 +606,9 @@ def flames_progress_stream(task_id):
                     eval_log_count += 1
                     yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
                     time.sleep(2)
-                print(f"[DEBUG] 推送了 {eval_log_count} 条评估日志")
                 
                 # 推送完所有评估日志后，更新任务状态为completed
                 set_task_status(task_id, 'completed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                print(f"[DEBUG] 任务 {task_id} 状态已更新为completed")
                 
                 # 推送任务完成状态给前端
                 completed_task_info = {
@@ -671,7 +622,6 @@ def flames_progress_stream(task_id):
                 }
                 time.sleep(3)
                 yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
-                print(f"[DEBUG] 已推送任务完成状态给前端: {completed_task_info}")
             else:
                 try:
                     for idx, item in enumerate(run_inference_and_score(args)):
@@ -695,7 +645,6 @@ def flames_progress_stream(task_id):
                     }
                         
                     yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
-                    print(f"[DEBUG] 已推送任务完成状态给前端: {completed_task_info}")
                 except Exception as e:
                     # 捕获异常并推送错误信息
                     error_message = f"任务执行失败: {str(e)}"
@@ -716,11 +665,9 @@ def flames_progress_stream(task_id):
                         'result': result
                     }
                     yield f"data: {json.dumps({'task_info': failed_task_info})}\n\n"
-                    print(f"[DEBUG] 已推送任务失败状态给前端: {failed_task_info}")
                     
         elif status == 'completed':
             # 推送任务完成状态给前端
-            print(f"[DEBUG] 任务 {task_id} 已完成，推送完成状态")
             completed_task_info = {
                 'task_id': str(task_id),
                 'model_name': model_name,
@@ -746,7 +693,6 @@ def flames_progress_stream(task_id):
             yield f"data: {json.dumps({'task_info': failed_task_info})}\n\n"
         else:
             # 其他状态（如pending）直接推送当前状态
-            print(f"[DEBUG] 任务 {task_id} 状态为 {status}，推送当前状态")
             yield f"data: {json.dumps({'task_info': task_info})}\n\n"
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
@@ -760,35 +706,48 @@ def flames_report(task_id):
     if status != 'completed':
         return jsonify({'task_id': str(task_id), 'msg': 'not completed'}), 400
     
-    score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
-    if not os.path.exists(score_file):
-        return jsonify({'task_id': str(task_id), 'msg': 'score file not found'}), 404
+    # 优先从数据库的 result 字段读取评分数据
+    score_data = None
+    if result:
+        try:
+            # 解析 result 字段（支持 str/dict/bytes）
+            if isinstance(result, str):
+                result_json = json.loads(result)
+            elif isinstance(result, dict):
+                result_json = result
+            elif isinstance(result, bytes):
+                result_json = json.loads(result.decode('utf-8'))
+            else:
+                raise TypeError(f"Unsupported result type: {type(result)}")
+            
+            score_data = {
+                'harmless_rate': result_json.get('harmless_rate'),
+                'harmless_rate_each_dim': result_json.get('harmless_rate_each_dim', {}),
+                'harmless_score': result_json.get('harmless_score'),
+                'harmless_score_each_dim': result_json.get('harmless_score_each_dim', {})
+            }
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            print(f"[ERROR] 解析数据库 result 字段失败: {e}")
     
-    score_data = parse_score_file(score_file)
+    # 如果数据库中没有评分数据，尝试从本地文件读取
+    if not score_data:
+        score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
+        if os.path.exists(score_file):
+            score_data = parse_score_file(score_file)
+        else:
+            # 返回空的评分数据结构
+            score_data = {
+                'harmless_rate': 0,
+                'harmless_rate_each_dim': {},
+                'harmless_score': 0,
+                'harmless_score_each_dim': {}
+            }
     
-    # 从数据库logs表获取日志数据
-    logs = get_task_logs(task_id)
-    
-    # 构建result数据（不包含 logs，只存储评分数据）
-    result_data = {
-        'harmless_rate': score_data.get('harmless_rate'),
-        'harmless_rate_each_dim': score_data.get('harmless_rate_each_dim', {}),
-        'harmless_score': score_data.get('harmless_score'),
-        'harmless_score_each_dim': score_data.get('harmless_score_each_dim', {}),
-        'logs_count': len(logs)  # 只存储日志数量，不存储具体内容
-    }
-    
-    # 将评分数据保存到数据库（不包含logs）
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE task_flames SET result=%s WHERE task_id=%s", (json.dumps(result_data, ensure_ascii=False), str(task_id)))
-        conn.commit()
-        conn.close()
-        print(f"[DEBUG] 已将评分数据保存到数据库，任务ID: {task_id}")
-    except Exception as e:
-        print(f"[ERROR] 保存评分数据到数据库失败: {e}")
-        traceback.print_exc()
+    # 尝试从本地文件读取日志数据（如果文件不存在则返回空数组）
+    logs = []
+    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+    if os.path.exists(pred_file):
+        logs = get_task_logs(task_id)
     
     return jsonify({
         'taskId': str(task_id),
@@ -797,8 +756,8 @@ def flames_report(task_id):
         'submit_time': submit_time.strftime('%Y-%m-%d %H:%M:%S') if submit_time else None,
         'end_time': end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else None,
         'status': status,
-        'data': result_data,
-        'log': logs  # 从数据库动态获取的logs
+        'data': score_data,
+        'log': logs
     })
 
 @app.route('/api/flames/history', methods=['GET'])
@@ -865,8 +824,6 @@ def debug_scheduler():
     调试API：手动触发调度器检查
     """
     try:
-        print(f"[DEBUG] 手动触发调度器检查")
-        
         # 检查running任务
         running_count = has_running_task()
         
@@ -901,7 +858,6 @@ def debug_scheduler():
             'message': '调度器状态检查完成'
         }
         
-        print(f"[DEBUG] 调度器状态: {result}")
         return jsonify(result)
         
     except Exception as e:
@@ -953,7 +909,6 @@ def generate_pdf_report(task_id, task_info, score_data, logs):
         # 转换为PDF，添加字体配置
         pdf = HTML(string=html_content).write_pdf(**font_config)
         
-        print(f"[DEBUG] PDF生成成功，大小: {len(pdf)} 字节")
         return pdf
         
     except Exception as e:
@@ -961,7 +916,6 @@ def generate_pdf_report(task_id, task_info, score_data, logs):
         # 尝试不使用字体配置的备用方案
         try:
             pdf = HTML(string=html_content).write_pdf()
-            print(f"[DEBUG] 备用PDF生成成功，大小: {len(pdf)} 字节")
             return pdf
         except Exception as e2:
             print(f"[ERROR] 备用PDF生成也失败: {str(e2)}")
@@ -1075,19 +1029,14 @@ def download_flames_report(task_id):
     # 检查任务是否存在
     row = get_task_row(task_id)
     if not row:
-        print(f"[DEBUG] 任务 {task_id} 不存在")
         return jsonify({'task_id': str(task_id), 'msg': 'not found'}), 404
     
     model_name, dataset_id, submit_time, status, end_time, result = row
-    print(f"[DEBUG] 任务状态: {status}")
     
     if status != 'completed':
-        print(f"[DEBUG] 任务未完成，无法下载报告")
         return jsonify({'task_id': str(task_id), 'msg': 'task is not completed'}), 400
     
-    # 使用数据库中的 result 字段（包含 scores 与 logs），不再依赖 jsonl 文件
-    print(f"[DEBUG] 使用数据库 result 字段: {'存在' if result else '为空'}")
-
+    # 使用数据库中的 result 字段，不再依赖 jsonl 文件
     if not result:
         print(f"[ERROR] 数据库 result 字段为空，无法生成报告")
         return jsonify({'task_id': str(task_id), 'msg': 'result not found in DB'}), 404
@@ -1117,14 +1066,11 @@ def download_flames_report(task_id):
     # 从数据库logs表获取日志数据
     logs = get_task_logs(task_id)
     if not logs:
-        print(f"[DEBUG] 数据库中未找到logs数据，尝试从文件读取")
         # 备用方案：从文件系统读取 predicted 数据
         pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
         if os.path.exists(pred_file):
-            print(f"[DEBUG] 从文件读取 logs: {pred_file}")
             logs = parse_predicted_log(pred_file)
         else:
-            print(f"[DEBUG] 未找到 predicted 文件，使用空 logs: {pred_file}")
             logs = []
 
     # 基本校验

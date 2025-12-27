@@ -266,10 +266,10 @@ def generate_score(data_path):
 
 def run_inference_and_score(args):
     try:
-        from collect import stream_process_data
+        from collect import stream_process_result
         # 1. 先流式推送GPT响应
         task_id = args.data_path.split('/')[-1].replace('Flames_', '').replace('.jsonl', '')
-        for item in stream_process_data(
+        for item in stream_process_result(
             task_id=task_id,
             api_key=args.api_key,
             api_base=args.base_url,

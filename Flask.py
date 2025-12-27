@@ -65,12 +65,12 @@ def cleanup_api_config(task_id):
             del API_CONFIG_CACHE[task_id_str]
 
 DB_CONFIG = {
-    'host': 'dbconn.sealosbja.site',
-    'port': 31247,
-    'user': 'root',
-    'password': '6xgvj9jx',
-    'db': 'redteam-dra',
-    'charset': 'utf8mb4'
+    'host': os.getenv('DB_HOST', 'host.docker.internal'),
+    'port': int(os.getenv('DB_PORT', '3307')),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', '123'),
+    'db': os.getenv('DB_NAME', 'llm-eval'),
+    'charset': os.getenv('DB_CHARSET', 'utf8mb4')
 }
 
 def get_db_conn():
@@ -78,7 +78,7 @@ def get_db_conn():
 
 def get_task_logs(task_id, limit_per_dimension=10):
     """从predicted文件获取任务的日志数据"""
-    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+    pred_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_predicted.jsonl")
     
     if not os.path.exists(pred_file):
         print(f"[WARN] predicted文件不存在: {pred_file}")
@@ -211,12 +211,12 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         if not os.path.exists(dataset_file):
             raise Exception(f"数据集文件不存在: {dataset_file}")
         
-        # 创建任务专用的输出文件路径
-        output_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl")
+        # 创建任务专用的输出文件路径（GPT响应写入的路径）
+        output_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}.jsonl")
         
         from argparse import Namespace
         args = Namespace(
-            data_path=output_file,  # 使用输出文件路径，因为后续推理会读取这个文件
+            data_path=output_file,  # 使用GPT响应输出的文件路径，因为后续推理会读取这个文件
             dataset_file=dataset_file,  # 传递原始数据集文件路径用于 GPT 调用
             max_length=512,
             val_bsz_per_gpu=16,
@@ -226,13 +226,35 @@ def run_task_algorithm(task_id, model_name, dataset_id):
         )
         for _ in run_inference_and_score(args):
             pass  # 这里只需执行算法，结果文件由算法写入
-        
-        # 任务完成后清理 API 配置
+
+        # 读取评分数据并保存到数据库
+        score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
+        score_data = None
+        if os.path.exists(score_file):
+            score_data = parse_score_file(score_file)
+
+        # 任务完成后清理 API 配置并更新数据库
         cleanup_api_config(task_id)
-        set_task_status(task_id, 'completed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        end_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # 更新任务状态和结果
+        conn = get_db_conn()
+        cursor = conn.cursor()
+        if score_data:
+            result_json = json.dumps(score_data, ensure_ascii=False)
+            cursor.execute("UPDATE task_flames SET status=%s, end_time=%s, result=%s WHERE task_id=%s",
+                         ('completed', end_time, result_json, str(task_id)))
+        else:
+            cursor.execute("UPDATE task_flames SET status=%s, end_time=%s WHERE task_id=%s",
+                         ('completed', end_time, str(task_id)))
+        conn.commit()
+        conn.close()
+
         print(f"[TASK] 任务完成: {task_id}")
     except Exception as e:
         print(f"[TASK] 任务失败: {task_id}, 错误: {e}")
+        import traceback
+        traceback.print_exc()  # 打印完整的堆栈跟踪
         # 即使失败也要清理 API 配置
         cleanup_api_config(task_id)
         set_task_status(task_id, 'failed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -562,7 +584,7 @@ def flames_progress_stream(task_id):
             dataset_file = get_dataset_file_by_id(int(dataset_id))
             
             args = Namespace(
-                data_path=os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl"),
+                data_path=os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}.jsonl"),
                 dataset_file=dataset_file,  # 传递原始数据集文件路径
                 max_length=512,
                 val_bsz_per_gpu=16,
@@ -576,7 +598,7 @@ def flames_progress_stream(task_id):
             # total_count = sum(1 for _ in open(total_file, 'r', encoding='utf-8') if _.strip()) if os.path.exists(total_file) else 0
             total_count=5
             # 断点续流：统计已完成条数
-            data_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}.jsonl")
+            data_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}.jsonl")
             already_done = 0
             lines = []
             if os.path.exists(data_file):
@@ -596,16 +618,24 @@ def flames_progress_stream(task_id):
                 # 断点续流时等待5秒再推送评估日志
                 time.sleep(5)
                 yield f"data: {json.dumps({'eval_log': '正在进行评估，请等候'}, ensure_ascii=False)}\n\n"
-                
 
-                time.sleep(5)
-                # 推送评估日志
-                score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
-                eval_log_count = 0
-                for log_line in read_score_log(score_file):
-                    eval_log_count += 1
-                    yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
-                    time.sleep(2)
+                # 等待score文件生成（最多等待30秒）
+                score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
+                max_wait = 30
+                wait_count = 0
+                while not os.path.exists(score_file) and wait_count < max_wait:
+                    time.sleep(1)
+                    wait_count += 1
+
+                if os.path.exists(score_file):
+                    # 推送评估日志
+                    eval_log_count = 0
+                    for log_line in read_score_log(score_file):
+                        eval_log_count += 1
+                        yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
+                        time.sleep(2)
+                else:
+                    yield f"data: {json.dumps({'error': '评估文件生成超时'}, ensure_ascii=False)}\n\n"
                 
                 # 推送完所有评估日志后，更新任务状态为completed
                 set_task_status(task_id, 'completed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -623,48 +653,70 @@ def flames_progress_stream(task_id):
                 time.sleep(3)
                 yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
             else:
-                try:
-                    for idx, item in enumerate(run_inference_and_score(args)):
-                        if idx < already_done:
+                # 不重新执行推理，只等待并读取已生成的数据
+                # 推送已完成的推理数据
+                for i in range(already_done):
+                    if i < len(lines):
+                        try:
+                            line_data = json.loads(lines[i])
+                            line_data['finished_count'] = i + 1
+                            line_data['total_count'] = total_count
+                            yield f"data: {json.dumps(line_data, ensure_ascii=False)}\n\n"
+                        except json.JSONDecodeError:
                             continue
-                        finished_count += 1
-                        item['finished_count'] = finished_count
-                        item['total_count'] = total_count
+                
+                # 等待推理完成
+                max_wait_time = 300  # 最多等待5分钟
+                wait_time = 0
+                while wait_time < max_wait_time:
+                    time.sleep(2)
+                    wait_time += 2
                     
-                        yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
-                    time.sleep(3)
-                    # 推送任务完成状态给前端
-                    completed_task_info = {
-                        'task_id': str(task_id),
-                        'model_name': model_name,
-                        'dataset_id': dataset_id,
-                        'submit_time': submit_time.strftime('%Y-%m-%d %H:%M:%S') if submit_time else None,
-                        'end_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'status': 'completed',
-                        'result': result
-                    }
-                        
-                    yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
-                except Exception as e:
-                    # 捕获异常并推送错误信息
-                    error_message = f"任务执行失败: {str(e)}"
-                    yield f"data: {json.dumps({'error': error_message}, ensure_ascii=False)}\n\n"
+                    # 检查是否有新数据
+                    current_lines = []
+                    if os.path.exists(data_file):
+                        with open(data_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
+                            current_lines = [line for line in f if line.strip()]
                     
-                    # 更新任务状态为failed
-                    set_task_status(task_id, 'failed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    if len(current_lines) > already_done:
+                        # 推送新数据
+                        for i in range(already_done, len(current_lines)):
+                            try:
+                                line_data = json.loads(current_lines[i])
+                                line_data['finished_count'] = i + 1
+                                line_data['total_count'] = total_count
+                                yield f"data: {json.dumps(line_data, ensure_ascii=False)}\n\n"
+                            except json.JSONDecodeError:
+                                continue
+                        already_done = len(current_lines)
                     
-                    # 推送任务失败状态给前端
-                    failed_task_info = {
-                        'task_id': str(task_id),
-                        'model_name': model_name,
-                        'dataset_id': dataset_id,
-                        'submit_time': submit_time.strftime('%Y-%m-%d %H:%M:%S') if submit_time else None,
-                        'end_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'status': 'failed',
-                        'error_message': error_message,
-                        'result': result
-                    }
-                    yield f"data: {json.dumps({'task_info': failed_task_info})}\n\n"
+                    # 检查是否完成
+                    if already_done >= total_count:
+                        break
+                
+                # 推送评估日志
+                time.sleep(5)
+                yield f"data: {json.dumps({'eval_log': '正在进行评估，请等候'}, ensure_ascii=False)}\n\n"
+                
+                time.sleep(5)
+                score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
+                eval_log_count = 0
+                for log_line in read_score_log(score_file):
+                    eval_log_count += 1
+                    yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
+                    time.sleep(2)
+                
+                # 推送任务完成状态给前端
+                completed_task_info = {
+                    'task_id': str(task_id),
+                    'model_name': model_name,
+                    'dataset_id': dataset_id,
+                    'submit_time': submit_time.strftime('%Y-%m-%d %H:%M:%S') if submit_time else None,
+                    'end_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'status': 'completed',
+                    'result': result
+                }
+                yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
                     
         elif status == 'completed':
             # 推送任务完成状态给前端
@@ -731,7 +783,7 @@ def flames_report(task_id):
     
     # 如果数据库中没有评分数据，尝试从本地文件读取
     if not score_data:
-        score_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_score.jsonl")
+        score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
         if os.path.exists(score_file):
             score_data = parse_score_file(score_file)
         else:
@@ -745,7 +797,7 @@ def flames_report(task_id):
     
     # 尝试从本地文件读取日志数据（如果文件不存在则返回空数组）
     logs = []
-    pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+    pred_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_predicted.jsonl")
     if os.path.exists(pred_file):
         logs = get_task_logs(task_id)
     
@@ -782,9 +834,9 @@ def debug_task_status(task_id):
         model_name, dataset_id, submit_time, status, end_time, result = row  # result 为空
         
         # 检查相关文件是否存在
-        data_file = f"data/Flames_{task_id}.jsonl"
-        pred_file = f"data/Flames_{task_id}_predicted.jsonl"
-        score_file = f"data/Flames_{task_id}_score.jsonl"
+        data_file = f"result/{task_id}/Flames_{task_id}.jsonl"
+        pred_file = f"result/{task_id}/Flames_{task_id}_predicted.jsonl"
+        score_file = f"result/{task_id}/Flames_{task_id}_score.jsonl"
         error_file = f"data/Flames_{task_id}_error.log"
         
         file_status = {
@@ -1045,7 +1097,7 @@ def download_flames_report(task_id):
         # 解析 result 字段（支持 str/dict/bytes）
         if isinstance(result, str):
             result_json = json.loads(result)
-        elif isinstance(result, (dict, list)):
+        elif isinstance(result, dict):
             result_json = result
         elif isinstance(result, bytes):
             result_json = json.loads(result.decode('utf-8'))
@@ -1067,7 +1119,7 @@ def download_flames_report(task_id):
     logs = get_task_logs(task_id)
     if not logs:
         # 备用方案：从文件系统读取 predicted 数据
-        pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+        pred_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_predicted.jsonl")
         if os.path.exists(pred_file):
             logs = parse_predicted_log(pred_file)
         else:
@@ -1075,7 +1127,7 @@ def download_flames_report(task_id):
 
     # 基本校验
     if score_data.get('harmless_rate') is None and score_data.get('harmless_score') is None:
-        print(f"[ERROR] 无法获取有效的评分数据 from DB")
+        print(f"[ERROR] 无法获取有效的评分数据")
         return jsonify({'task_id': str(task_id), 'msg': 'insufficient score data'}), 400
 
     # 任务信息
@@ -1129,7 +1181,7 @@ def download_flames_logs(task_id):
     
     # 如果数据库中没有数据，尝试从文件读取（备用方案）
     if not logs:
-        pred_file = os.path.join(BASE_DIR, f"data/Flames_{task_id}_predicted.jsonl")
+        pred_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_predicted.jsonl")
         if not os.path.exists(pred_file):
             return jsonify({'task_id': str(task_id), 'msg': 'logs not found in database or file'}), 404
         logs = parse_predicted_log(pred_file)

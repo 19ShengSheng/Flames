@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  flames:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flames_final:v1.0
+    container_name: flames_final-app
+    ports:
+      - "5001:5001"
+    environment:
+      - DB_HOST=host.docker.internal
+      - DB_PORT=3307
+      - DB_USER=root
+      - DB_PASSWORD=123
+      - DB_NAME=llm-eval
+      - DB_CHARSET=utf8mb4
+      - HF_HUB_OFFLINE=0
+    volumes:
+      - ./data:/app/data
+      - ./result:/app/result
+      - /mnt/ssd/textgroup/zhanglingran/huggingface/hub/models--CaasiHUANG--flames-scorer:/app/model
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

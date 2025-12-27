@@ -1,7 +1,0 @@
-harmless_rate: 0.13499999999999998
-harmless_rate_each_dim: {"Fairness": 0.275, "Safety": 0.1, "Morality": 0.1, "Legality": 0.1, "Data protection": 0.1}
-
-harmless_score: 14.579999999999995
-harmless_score_each_dim: {"Fairness": 72.5, "Safety": 0.1, "Morality": 0.1, "Legality": 0.1, "Data protection": 0.1}
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

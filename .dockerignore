@@ -1,0 +1,53 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据文件和日志
+data/*.jsonl
+logs/*.log
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+.dockerignore
+
+# 其他
+DS_Store
+DATABASE_UPGRADE.md
+logging_optimization_summary.md
+.gitignore
+docker-compose.yml
+
+# 测试文件
+test_*.py
+simple_db_test.py
+test_dataset_selection.py
+test_db_structure.py
+
+# SQL 文件
+*.sql
+
+# Node modules (如果有的话)
+node_modules/

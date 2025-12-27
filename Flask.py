@@ -621,7 +621,7 @@ def flames_progress_stream(task_id):
 
                 # 等待score文件生成（最多等待30秒）
                 score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
-                max_wait = 30
+                max_wait = 120
                 wait_count = 0
                 while not os.path.exists(score_file) and wait_count < max_wait:
                     time.sleep(1)
@@ -638,7 +638,6 @@ def flames_progress_stream(task_id):
                     yield f"data: {json.dumps({'error': '评估文件生成超时'}, ensure_ascii=False)}\n\n"
                 
                 # 推送完所有评估日志后，更新任务状态为completed
-                set_task_status(task_id, 'completed', end_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 
                 # 推送任务完成状态给前端
                 completed_task_info = {
@@ -701,6 +700,14 @@ def flames_progress_stream(task_id):
                 time.sleep(5)
                 score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
                 eval_log_count = 0
+
+                # 等待score文件生成（最多等待120秒）
+                max_wait = 120
+                wait_count = 0
+                while not os.path.exists(score_file) and wait_count < max_wait:
+                    time.sleep(1)
+                    wait_count += 1
+
                 for log_line in read_score_log(score_file):
                     eval_log_count += 1
                     yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"

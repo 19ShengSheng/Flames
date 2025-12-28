@@ -23,6 +23,7 @@ env/
 data/*.jsonl
 logs/*.log
 *.log
+result/
 
 # Git
 .git/
@@ -51,3 +52,5 @@ test_db_structure.py
 
 # Node modules (如果有的话)
 node_modules/
+
+README.md

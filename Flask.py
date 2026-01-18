@@ -5,7 +5,9 @@ from argparse import Namespace
 from flask import send_file
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
-
+from dotenv import load_dotenv
+load_dotenv()
+print(f"DB_HOST: {os.getenv('DB_HOST')}")
 # Add current directory to Python path to ensure local modules can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -378,32 +380,6 @@ def create_flames_tasks_with_ids(model_name, task_configs, submit_time):
 
     return tasks
 
-def create_flames_tasks(model_name, dataset_ids, submit_time):
-    tasks = []
-    
-    # 检查是否有running任务
-    running_count = has_running_task()
-    
-    for i, dataset_id in enumerate(dataset_ids):
-        task_id = uuid.uuid4()
-        
-        # 策略：
-        # 1. 如果当前没有running任务，且这是第一个新任务，直接设为running
-        # 2. 否则设为pending，由调度器按FIFO顺序处理
-        if running_count == 0 and i == 0:
-            initial_status = 'running'
-            print(f"[TASK] 立即启动任务: {task_id} (模型: {model_name}, 数据集: {dataset_id})")
-            # 立即启动任务执行线程
-            t = threading.Thread(target=run_task_algorithm, args=(task_id, model_name, dataset_id))
-            t.start()
-        else:
-            initial_status = 'pending'
-        
-        insert_task_to_db(task_id, model_name, dataset_id, submit_time, initial_status, None)
-        tasks.append({"dataset_id": dataset_id, "task_id": str(task_id)})
-    
-    return tasks
-
 def parse_score_file(score_file):
     result = {
         'harmless_rate': None,
@@ -509,6 +485,19 @@ def parse_predicted_log(pred_file):
 
     return all_logs
 
+
+def wait_for_file_with_progress(file_path, max_wait=300, check_interval=2, progress_interval=30):
+    """等待文件生成，定期推送进度"""
+    wait_count = 0
+    while not os.path.exists(file_path) and wait_count < max_wait:
+        time.sleep(check_interval)
+        wait_count += check_interval
+     
+        if wait_count % progress_interval == 0:
+            remaining = max_wait - wait_count
+            yield f"data: {json.dumps({'eval_log': f'等待中，剩余时间约 {remaining} 秒...'}, ensure_ascii=False)}\n\n"
+    
+    return os.path.exists(file_path)
 # --- 路由定义 ---
 
 @app.route('/api/flames/create_task', methods=['POST'])
@@ -592,11 +581,8 @@ def flames_progress_stream(task_id):
                 api_key=api_config['api_key'],
                 model_name=model_name
             )
-            # 根据dataset_id选择正确的数据集文件来统计总条数
-            total_file = get_dataset_file_by_id(int(dataset_id))
-            # 调试阶段只取5条，全部的有1000条
-            # total_count = sum(1 for _ in open(total_file, 'r', encoding='utf-8') if _.strip()) if os.path.exists(total_file) else 0
-            total_count=5
+            # 全部的有1000条
+            total_count = sum(1 for _ in open(dataset_file, 'r', encoding='utf-8') if _.strip()) if os.path.exists(dataset_file) else 0
             # 断点续流：统计已完成条数
             data_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}.jsonl")
             already_done = 0
@@ -605,7 +591,6 @@ def flames_progress_stream(task_id):
                 with open(data_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
                     lines = [line for line in f if line.strip()]
                     already_done = len(lines)
-            finished_count = already_done
             # 判断是否全部推理已完成
             inference_total = total_count  # 这里假设推理流总数等于已完成条数
             if already_done >= inference_total and already_done > 0:
@@ -619,15 +604,9 @@ def flames_progress_stream(task_id):
                 time.sleep(5)
                 yield f"data: {json.dumps({'eval_log': '正在进行评估，请等候'}, ensure_ascii=False)}\n\n"
 
-                # 等待score文件生成（最多等待30秒）
+                # 等待score文件生成（最多等待300秒）
                 score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
-                max_wait = 120
-                wait_count = 0
-                while not os.path.exists(score_file) and wait_count < max_wait:
-                    time.sleep(1)
-                    wait_count += 1
-
-                if os.path.exists(score_file):
+                if wait_for_file_with_progress(score_file):
                     # 推送评估日志
                     eval_log_count = 0
                     for log_line in read_score_log(score_file):
@@ -635,8 +614,7 @@ def flames_progress_stream(task_id):
                         yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
                         time.sleep(2)
                 else:
-                    yield f"data: {json.dumps({'error': '评估文件生成超时'}, ensure_ascii=False)}\n\n"
-                
+                    yield f"data: {json.dumps({'error': '评估文件生成超时,请检查后端日志'}, ensure_ascii=False)}\n\n"
                 # 推送完所有评估日志后，更新任务状态为completed
                 
                 # 推送任务完成状态给前端
@@ -653,8 +631,8 @@ def flames_progress_stream(task_id):
                 yield f"data: {json.dumps({'task_info': completed_task_info})}\n\n"
             else:
                 # 不重新执行推理，只等待并读取已生成的数据
-                # 推送已完成的推理数据
-                for i in range(already_done):
+                # 推送已完成的推理数据最后5条
+                for i in range(max(already_done - 5, 0), already_done):
                     if i < len(lines):
                         try:
                             line_data = json.loads(lines[i])
@@ -699,20 +677,17 @@ def flames_progress_stream(task_id):
                 
                 time.sleep(5)
                 score_file = os.path.join(BASE_DIR, f"result/{task_id}/Flames_{task_id}_score.jsonl")
-                eval_log_count = 0
-
-                # 等待score文件生成（最多等待120秒）
-                max_wait = 120
-                wait_count = 0
-                while not os.path.exists(score_file) and wait_count < max_wait:
-                    time.sleep(1)
-                    wait_count += 1
-
-                for log_line in read_score_log(score_file):
-                    eval_log_count += 1
-                    yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
-                    time.sleep(2)
                 
+
+                # 等待score文件生成（最多等待300秒）
+                if wait_for_file_with_progress(score_file):
+                    eval_log_count = 0
+                    for log_line in read_score_log(score_file):
+                        eval_log_count += 1
+                        yield f"data: {json.dumps({'eval_log': log_line, 'finished_count': already_done, 'total_count': total_count}, ensure_ascii=False)}\n\n"
+                        time.sleep(2)
+                else:
+                    yield f"data: {json.dumps({'error': '评估文件生成超时,请检查后端日志'}, ensure_ascii=False)}\n\n"
                 # 推送任务完成状态给前端
                 completed_task_info = {
                     'task_id': str(task_id),

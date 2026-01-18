@@ -2028,3 +2028,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/d6/1e182231c836c13c5438d13f7425e51fcc7d2dc96a03b1665d6100b7713c/zopfli-0.4.0-pp311-pypy311_pp73-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f67d04280065e24cb9a4174cb6b3d1f763687f8cb2963aa135ad8f57c6995f5a", size = 124992, upload-time = "2025-11-07T17:00:57.474Z" },
     { url = "https://files.pythonhosted.org/packages/4e/52/4e67fa948c213368540a807a96da822035c71ffcc7a5ada8ee90da5b9614/zopfli-0.4.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:25e4863b8dc30e5d5309f87c106b0b7d3da4ed0e340b8a52b36d4471e797589f", size = 100851, upload-time = "2025-11-07T17:00:58.331Z" },
 ]
+
+[[package]]
+name = "python-dotenv"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/7a/4f6b7d1c5c2c0c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6/python-dotenv-1.2.1.tar.gz", hash = "sha256:a8e3c9c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5", size = 42884, upload-time = "2025-12-17T14:30:00.000Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/8a/4f6b7d1c5c2c0c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c/python-dotenv-1.2.1-py3-none-any.whl", hash = "sha256:b8e3c9c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5", size = 26162, upload-time = "2025-12-17T14:30:00.000Z" },
+]

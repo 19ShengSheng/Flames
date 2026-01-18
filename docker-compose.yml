@@ -17,6 +17,7 @@ services:
       - DB_NAME=llm-eval
       - DB_CHARSET=utf8mb4
       - HF_HUB_OFFLINE=0
+      - MODEL_PATH=/app/model/snapshots/cdb15280415b335bc8ee1b03bd461dd03bcc10b1
     volumes:
       - ./data:/app/data
       - ./result:/app/result

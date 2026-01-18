@@ -18,4 +18,5 @@ dependencies = [
     "transformers>=4.57.3",
     "weasyprint>=66.0",
     "protobuf>=3.20.0",
+    "python-dotenv==1.2.1",
 ]

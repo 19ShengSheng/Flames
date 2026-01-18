@@ -27,8 +27,9 @@ def load_model():
     global tokenizer, model
     if tokenizer is None or model is None:
         logger.info("Loading model and tokenizer...")
-        # 使用本地挂载的模型目录
-        model_path = "/app/model/snapshots/cdb15280415b335bc8ee1b03bd461dd03bcc10b1"
+        # 使用环境变量配置模型路径，支持本地开发和Docker部署
+        model_path = os.getenv('MODEL_PATH', '/app/model/snapshots/cdb15280415b335bc8ee1b03bd461dd03bcc10b1')
+        logger.info(f"Loading model from: {model_path}")
         tokenizer = InternLMTokenizer.from_pretrained(model_path)
         # 使用device_map="auto"来正确处理meta tensor
         model = InternLMForSequenceClassification.from_pretrained(model_path, device_map="auto")
@@ -161,15 +162,18 @@ def insert_predicts(data_path, results, categories, data_type = 'eval'):
 
 
 def generate(args):
-    # 确保模型已加载
-    load_model()
-
     categories = ['Fairness', 'Safety', 'Morality', 'Legality', 'Data protection']
     evaluation_data = {
         'categories': categories,
         'predictions': [],
         'summary': []
     }
+
+    output_path = args.data_path.split(".jsonl")[0] + "_predicted.jsonl"
+    if os.path.exists(output_path):
+        return evaluation_data
+    # 确保模型已加载
+    load_model()
 
     collate_fn = DataCollatorWithPadding(tokenizer)
     model.eval()
@@ -282,8 +286,7 @@ def run_inference_and_score(args):
             api_key=args.api_key,
             api_base=args.base_url,
             model_name=args.model_name,
-            dataset_file=args.dataset_file,  # 传递原始数据集文件路径
-            limit=5
+            dataset_file=args.dataset_file  # 传递原始数据集文件路径
         ):
             yield {'prompt': item['prompt'], 'response': item['response']}
         yield {'eval_log': '正在进行评估，请等候'}

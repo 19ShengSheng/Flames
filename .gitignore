@@ -33,7 +33,6 @@ Thumbs.db
 
 # Node.js
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -43,7 +42,6 @@ result/
 logs/
 
 # Cache
-api_config_cache.py
 .pytest_cache/
 .coverage
 htmlcov/

@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: flames:v1.1
-    container_name: flames_v1.1-app
+    image: flames:v1.2
+    container_name: flamesv1.2-app
     ports:
       - "5001:5001"
     environment:

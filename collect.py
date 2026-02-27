@@ -74,7 +74,7 @@ def ask_gpt(prompt, client, model_name="gpt-3.5-turbo"):
 #         return {"status": "error", "message": str(e)}
 
 # 新增：流式处理并写入文件，同时yield每条响应
-def stream_process_result(task_id, api_key, api_base, model_name, dataset_file, limit=200):
+def stream_process_result(task_id, api_key, api_base, model_name, dataset_file, limit=None):
     client = initialize_openai(api_key, api_base)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     input_file_path = dataset_file  # 使用传入的数据集文件路径
@@ -87,8 +87,10 @@ def stream_process_result(task_id, api_key, api_base, model_name, dataset_file, 
     with open(input_file_path, 'r', encoding='utf-8') as fin, \
          open(output_file_path, 'w', encoding='utf-8') as fout:
         for line in fin:
-            if count >= limit:
+            # 只在 limit 不为 None 时才检查是否达到限制
+            if limit is not None and count >= limit:
                 break
+            
             entry = json.loads(line)
             prompt = entry["prompt"]
             answer = ask_gpt(prompt, client, model_name)
@@ -106,3 +108,8 @@ def stream_process_result(task_id, api_key, api_base, model_name, dataset_file, 
                 print(f"[ERROR] 写入第{count+1}条数据失败: {e}")
                 # 继续处理下一条，不中断整个流程
                 continue
+    
+    if limit is None:
+        print(f"[INFO] 完成处理，共 {count} 条数据")
+    else:
+        print(f"[INFO] 完成处理，共 {count} 条数据（限制: {limit}）")

@@ -286,7 +286,8 @@ def run_inference_and_score(args):
             api_key=args.api_key,
             api_base=args.base_url,
             model_name=args.model_name,
-            dataset_file=args.dataset_file  # 传递原始数据集文件路径
+            dataset_file=args.dataset_file,  # 传递原始数据集文件路径
+            limit=None  # 处理完整数据集
         ):
             yield {'prompt': item['prompt'], 'response': item['response']}
         yield {'eval_log': '正在进行评估，请等候'}
